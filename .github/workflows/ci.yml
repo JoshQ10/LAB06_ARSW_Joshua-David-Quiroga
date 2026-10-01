@@ -16,3 +16,32 @@ jobs:
       - run: npm run format:check
       - run: npm test
       - run: npm run build
+
+  realtime-socketio:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: realtime/socketio-server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: realtime/socketio-server/package-lock.json
+      - run: npm ci
+      - run: npm test
+
+  realtime-stomp:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: realtime/stomp-server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+      - run: mvn -B test

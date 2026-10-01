@@ -47,6 +47,7 @@ export const initialState = {
   items: {}, // { 'author/name': blueprint }
   selectedAuthor: '',
   current: null,
+  dirty: false, // el plano actual tiene puntos dibujados (propios o remotos) sin guardar
   status: byOperation('idle'),
   errors: byOperation(null),
   backups: {}, // requestId -> estado previo, para revertir actualizaciones optimistas
@@ -63,6 +64,14 @@ const slice = createSlice({
     },
     clearCurrent(state) {
       state.current = null
+      state.dirty = false
+    },
+    // Dibujo incremental: puntos propios (clic) o de otros clientes (tiempo real).
+    pointsAdded(state, action) {
+      const { author, name, points } = action.payload
+      if (!sameBlueprint(state.current, author, name) || !points?.length) return
+      state.current.points = [...(state.current.points || []), ...points]
+      state.dirty = true
     },
     clearError(state, action) {
       state.errors[action.payload] = null
@@ -86,20 +95,25 @@ const slice = createSlice({
       })
       .addCase(fetchBlueprint.fulfilled, (s, a) => {
         s.current = a.payload
+        s.dirty = false
       })
       .addCase(createBlueprint.fulfilled, (s, a) => {
         const bp = a.payload
         s.items[keyOf(bp.author, bp.name)] = bp
         s.current = bp
+        s.dirty = false
       })
 
       // PUT optimista: se aplica en pending y se revierte en rejected
       .addCase(updateBlueprint.pending, (s, a) => {
         const { author, name, points } = a.meta.arg
         const k = keyOf(author, name)
-        s.backups[a.meta.requestId] = { key: k, item: s.items[k] ?? null, current: s.current }
+        s.backups[a.meta.requestId] = backupOf(s, k)
         s.items[k] = { ...(s.items[k] || { author, name }), points }
-        if (sameBlueprint(s.current, author, name)) s.current = { ...s.current, points }
+        if (sameBlueprint(s.current, author, name)) {
+          s.current = { ...s.current, points }
+          s.dirty = false
+        }
       })
       .addCase(updateBlueprint.fulfilled, (s, a) => {
         delete s.backups[a.meta.requestId]
@@ -110,9 +124,12 @@ const slice = createSlice({
       .addCase(deleteBlueprint.pending, (s, a) => {
         const { author, name } = a.meta.arg
         const k = keyOf(author, name)
-        s.backups[a.meta.requestId] = { key: k, item: s.items[k] ?? null, current: s.current }
+        s.backups[a.meta.requestId] = backupOf(s, k)
         delete s.items[k]
-        if (sameBlueprint(s.current, author, name)) s.current = null
+        if (sameBlueprint(s.current, author, name)) {
+          s.current = null
+          s.dirty = false
+        }
       })
       .addCase(deleteBlueprint.fulfilled, (s, a) => {
         delete s.backups[a.meta.requestId]
@@ -145,16 +162,21 @@ const slice = createSlice({
   },
 })
 
+function backupOf(state, key) {
+  return { key, item: state.items[key] ?? null, current: state.current, dirty: state.dirty }
+}
+
 function restore(state, requestId) {
   const backup = state.backups[requestId]
   if (!backup) return
   if (backup.item) state.items[backup.key] = backup.item
   else delete state.items[backup.key]
   state.current = backup.current
+  state.dirty = backup.dirty
   delete state.backups[requestId]
 }
 
-export const { selectAuthor, clearCurrent, clearError } = slice.actions
+export const { selectAuthor, clearCurrent, clearError, pointsAdded } = slice.actions
 export default slice.reducer
 
 // ---- Selectores (memoizados con createSelector) ----
@@ -162,6 +184,7 @@ const selectSlice = (state) => state.blueprints
 export const selectItems = (state) => selectSlice(state).items
 export const selectCurrent = (state) => selectSlice(state).current
 export const selectCurrentName = (state) => selectSlice(state).current?.name ?? ''
+export const selectDirty = (state) => selectSlice(state).dirty
 export const selectSelectedAuthor = (state) => selectSlice(state).selectedAuthor
 export const selectStatus = (state) => selectSlice(state).status
 export const selectErrors = (state) => selectSlice(state).errors

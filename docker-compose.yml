@@ -12,6 +12,24 @@ services:
       timeout: 3s
       retries: 20
 
+  # Tiempo real con Socket.IO (Node): salas por plano.
+  realtime-io:
+    build:
+      context: ./realtime/socketio-server
+    environment:
+      CORS_ORIGIN: http://localhost:5173
+    ports:
+      - '3001:3001'
+
+  # Tiempo real con STOMP (Spring): tópicos por plano. Va en el 8081 porque el 8080 es del CRUD.
+  realtime-stomp:
+    build:
+      context: ./realtime/stomp-server
+    environment:
+      CORS_ORIGIN: http://localhost:5173
+    ports:
+      - '8081:8081'
+
   web:
     build:
       context: .

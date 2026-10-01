@@ -10,18 +10,22 @@ import {
   selectAuthors,
   selectCurrent,
   selectCurrentName,
+  selectDirty,
   selectErrors,
   selectSelectedAuthor,
   selectSelectedAuthorBlueprints,
   selectSelectedAuthorTotalPoints,
   selectStatus,
+  updateBlueprint,
 } from '../features/blueprints/blueprintsSlice.js'
 import { selectIsAuthenticated } from '../features/auth/authSlice.js'
+import { useBlueprintRealtime, useRealtimeTech } from '../hooks/useBlueprintRealtime.js'
 import BlueprintCanvas from '../components/BlueprintCanvas.jsx'
 import BlueprintList from '../components/BlueprintList.jsx'
 import TopBlueprints from '../components/TopBlueprints.jsx'
 import ErrorBanner from '../components/ErrorBanner.jsx'
 import DeleteButton from '../components/DeleteButton.jsx'
+import RealtimeSelector from '../components/RealtimeSelector.jsx'
 
 export default function BlueprintsPage() {
   const dispatch = useDispatch()
@@ -34,9 +38,21 @@ export default function BlueprintsPage() {
   const status = useSelector(selectStatus)
   const errors = useSelector(selectErrors)
   const isAuthenticated = useSelector(selectIsAuthenticated)
+  const dirty = useSelector(selectDirty)
 
   const [authorInput, setAuthorInput] = useState(selectedAuthor)
   const [lastOpened, setLastOpened] = useState(null)
+
+  // Tiempo real: el plano abierto es el canal. Sin sesión se ven los trazos de los demás
+  // pero no se dibuja (crear y modificar planos exige JWT, igual que el CRUD).
+  const [tech, setTech] = useRealtimeTech()
+  const { status: rtStatus, addPoint } = useBlueprintRealtime(tech, current?.author, current?.name)
+  const canDraw = !!current && isAuthenticated
+
+  const save = () =>
+    dispatch(
+      updateBlueprint({ author: current.author, name: current.name, points: current.points }),
+    )
 
   const search = (e) => {
     e.preventDefault()
@@ -128,15 +144,18 @@ export default function BlueprintsPage() {
       </section>
 
       <section className="card stack">
-        <div className="field">
-          <label htmlFor="current-blueprint">Current blueprint</label>
-          <input
-            id="current-blueprint"
-            className="input current-name"
-            value={currentName}
-            placeholder="—"
-            readOnly
-          />
+        <div className="grid cols-2">
+          <div className="field">
+            <label htmlFor="current-blueprint">Current blueprint</label>
+            <input
+              id="current-blueprint"
+              className="input current-name"
+              value={currentName}
+              placeholder="—"
+              readOnly
+            />
+          </div>
+          <RealtimeSelector tech={tech} onChange={setTech} status={rtStatus} />
         </div>
 
         <ErrorBanner
@@ -154,39 +173,70 @@ export default function BlueprintsPage() {
         />
 
         <div className="canvas-wrap" aria-busy={loadingCurrent}>
-          <BlueprintCanvas title={currentName || 'Sin plano'} points={current?.points || []} />
+          <BlueprintCanvas
+            title={currentName || 'Sin plano'}
+            points={current?.points || []}
+            viewKey={current ? `${current.author}/${current.name}` : undefined}
+            onAddPoint={canDraw ? addPoint : undefined}
+          />
           {loadingCurrent && <div className="canvas-overlay">Cargando…</div>}
         </div>
 
         {current && (
-          <div className="toolbar">
+          <p className="muted small">
+            {canDraw ? (
+              'Haz clic en el lienzo para agregar puntos.'
+            ) : (
+              <>
+                <Link to="/login">Inicia sesión</Link> para dibujar sobre el plano.
+              </>
+            )}
+            {dirty && <strong> Hay cambios sin guardar.</strong>}
+          </p>
+        )}
+
+        <div className="toolbar">
+          {current && (
             <span className="muted">
               {current.author} · {current.points?.length || 0} puntos
             </span>
-            <span className="spacer" />
+          )}
+          <span className="spacer" />
+          <Link className="btn" to="/blueprints/new">
+            Crear
+          </Link>
+          {current && (
             <Link
               className="btn"
               to={`/blueprints/${encodeURIComponent(current.author)}/${encodeURIComponent(current.name)}`}
             >
               Detalle
             </Link>
-            {isAuthenticated && (
-              <>
-                <Link
-                  className="btn"
-                  to={`/blueprints/${encodeURIComponent(current.author)}/${encodeURIComponent(current.name)}/edit`}
-                >
-                  Editar
-                </Link>
-                <DeleteButton
-                  onConfirm={() =>
-                    dispatch(deleteBlueprint({ author: current.author, name: current.name }))
-                  }
-                />
-              </>
-            )}
-          </div>
-        )}
+          )}
+          {current && isAuthenticated && (
+            <>
+              <button
+                type="button"
+                className="btn primary"
+                onClick={save}
+                disabled={!dirty || status.update === 'loading'}
+              >
+                Guardar
+              </button>
+              <Link
+                className="btn"
+                to={`/blueprints/${encodeURIComponent(current.author)}/${encodeURIComponent(current.name)}/edit`}
+              >
+                Editar
+              </Link>
+              <DeleteButton
+                onConfirm={() =>
+                  dispatch(deleteBlueprint({ author: current.author, name: current.name }))
+                }
+              />
+            </>
+          )}
+        </div>
       </section>
     </div>
   )

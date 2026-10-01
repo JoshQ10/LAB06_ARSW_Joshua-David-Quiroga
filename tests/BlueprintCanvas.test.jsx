@@ -55,6 +55,32 @@ describe('BlueprintCanvas', () => {
     expect(onAddPoint).toHaveBeenCalledWith({ x: 42, y: 84 })
   })
 
+  it('con viewKey fija la escala del plano y el clic devuelve coordenadas del plano', () => {
+    const tiny = [
+      { x: 0, y: 0 },
+      { x: 10, y: 10 },
+    ]
+    const { scale, offset } = computeTransform(tiny, 520, 360)
+    const onAddPoint = vi.fn()
+    const view = (pts) => (
+      <BlueprintCanvas points={pts} viewKey="john/house" onAddPoint={onAddPoint} />
+    )
+    const { ctx, rerender } = renderWithContextSpy(view(tiny))
+
+    // Clic sobre el punto (10, 10) tal como se ve ampliado en el lienzo
+    fireEvent.click(screen.getByTestId('blueprint-canvas'), {
+      clientX: offset + 10 * scale,
+      clientY: offset + 10 * scale,
+    })
+    expect(onAddPoint).toHaveBeenCalledWith({ x: 10, y: 10 })
+
+    // Un punto nuevo más lejano no cambia la escala de los anteriores
+    ctx.lineTo.mockClear()
+    rerender(view([...tiny, { x: 14, y: 5 }]))
+    expect(ctx.lineTo).toHaveBeenCalledWith(offset + 10 * scale, offset + 10 * scale)
+    expect(ctx.lineTo).toHaveBeenCalledWith(offset + 14 * scale, offset + 5 * scale)
+  })
+
   it('sin onAddPoint el clic no hace nada', () => {
     render(<BlueprintCanvas points={points} />)
     const canvas = screen.getByTestId('blueprint-canvas')

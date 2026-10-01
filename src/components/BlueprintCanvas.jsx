@@ -15,13 +15,15 @@ const COLORS = {
  * caben razonablemente se dibujan tal cual; si son diminutos (p. ej. el seed del
  * Lab 4, 0..15) o se salen del lienzo, se escalan manteniendo el origen.
  */
+const IDENTITY = { scale: 1, offset: 0 }
+
 export function computeTransform(points, width, height) {
-  if (!points.length) return { scale: 1, offset: 0 }
+  if (!points.length) return IDENTITY
   const maxX = Math.max(...points.map((p) => p.x), 1)
   const maxY = Math.max(...points.map((p) => p.y), 1)
   const fits = maxX <= width && maxY <= height
   const tiny = maxX < width / 4 && maxY < height / 4
-  if (fits && !tiny) return { scale: 1, offset: 0 }
+  if (fits && !tiny) return IDENTITY
   const scale = Math.min((width - 2 * PADDING) / maxX, (height - 2 * PADDING) / maxY)
   return { scale, offset: PADDING }
 }
@@ -33,14 +35,19 @@ export default function BlueprintCanvas({
   height = 360,
   title = 'Blueprint',
   onAddPoint,
+  viewKey,
 }) {
   const ref = useRef(null)
   const interactive = typeof onAddPoint === 'function'
-  // En modo dibujo se usan coordenadas reales para que el clic coincida con el punto.
-  const transform = useMemo(
-    () => (interactive ? { scale: 1, offset: 0 } : computeTransform(points, width, height)),
-    [interactive, points, width, height],
-  )
+  // Con viewKey la escala se calcula una vez por plano y no cambia mientras se le
+  // agregan puntos: el dibujo no "salta" y todos los clientes lo ven igual.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const pinned = useMemo(() => computeTransform(points, width, height), [viewKey, width, height])
+  const transform = useMemo(() => {
+    if (viewKey != null) return pinned
+    // En modo dibujo se usan coordenadas reales para que el clic coincida con el punto.
+    return interactive ? IDENTITY : computeTransform(points, width, height)
+  }, [viewKey, pinned, interactive, points, width, height])
 
   useEffect(() => {
     const canvas = ref.current
@@ -97,9 +104,12 @@ export default function BlueprintCanvas({
     // El canvas se escala con CSS: se convierte de píxeles de pantalla a píxeles del lienzo.
     const sx = width / (rect.width || width)
     const sy = height / (rect.height || height)
-    const x = Math.round((e.clientX - rect.left) * sx)
-    const y = Math.round((e.clientY - rect.top) * sy)
-    onAddPoint({ x: Math.min(Math.max(x, 0), width), y: Math.min(Math.max(y, 0), height) })
+    const x = Math.min(Math.max((e.clientX - rect.left) * sx, 0), width)
+    const y = Math.min(Math.max((e.clientY - rect.top) * sy, 0), height)
+    // De píxeles del lienzo a coordenadas del plano (inversa de la escala de dibujo).
+    const { scale, offset } = transform
+    const toPlan = (v) => Math.max(Math.round((v - offset) / scale), 0)
+    onAddPoint({ x: toPlan(x), y: toPlan(y) })
   }
 
   return (

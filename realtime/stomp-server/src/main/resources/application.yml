@@ -1,0 +1,17 @@
+server:
+  # El 8080 lo usa la API CRUD de Blueprints (Lab 4)
+  port: ${PORT:8081}
+
+blueprints:
+  rt:
+    # Origenes que pueden abrir el WebSocket (separados por coma). En produccion, solo el front.
+    allowed-origins: ${CORS_ORIGIN:http://localhost:5173,http://localhost:4173}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never

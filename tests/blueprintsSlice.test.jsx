@@ -6,6 +6,7 @@ import reducer, {
   fetchBlueprint,
   fetchByAuthor,
   initialState,
+  pointsAdded,
   selectAuthor,
   selectAuthors,
   selectSelectedAuthorBlueprints,
@@ -100,6 +101,45 @@ describe('blueprints slice (reducers puros)', () => {
     s = reducer(s, rejected(createBlueprint, 'existe', {}))
     s = reducer(s, clearError('create'))
     expect(s.errors.create).toBeNull()
+  })
+
+  describe('dibujo incremental (pointsAdded)', () => {
+    const house = bp('john', 'house', 2)
+    const added = { author: 'john', name: 'house', points: [{ x: 9, y: 9 }] }
+
+    it('agrega los puntos al plano actual y lo marca con cambios sin guardar', () => {
+      const s = reducer({ ...withItems(house), current: house }, pointsAdded(added))
+      expect(s.current.points).toEqual([...house.points, { x: 9, y: 9 }])
+      expect(s.dirty).toBe(true)
+      // El catálogo (lo guardado en el servidor) no cambia hasta que se guarda
+      expect(s.items['john/house'].points).toHaveLength(2)
+    })
+
+    it('ignora puntos de un plano que no es el actual', () => {
+      const start = { ...initialState, current: house }
+      expect(reducer(start, pointsAdded({ ...added, name: 'otro' }))).toBe(start)
+      expect(reducer(initialState, pointsAdded(added))).toBe(initialState)
+    })
+
+    it('guardar limpia la marca y un fallo la restaura junto con los puntos', () => {
+      const drawn = reducer({ ...withItems(house), current: house }, pointsAdded(added))
+      const arg = { author: 'john', name: 'house', points: drawn.current.points }
+
+      let s = reducer(drawn, pending(updateBlueprint, arg))
+      expect(s.dirty).toBe(false)
+      expect(s.items['john/house'].points).toHaveLength(3)
+
+      s = reducer(s, rejected(updateBlueprint, 'Server error', arg))
+      expect(s.dirty).toBe(true)
+      expect(s.current.points).toHaveLength(3)
+      expect(s.items['john/house'].points).toHaveLength(2)
+    })
+
+    it('abrir otro plano descarta la marca', () => {
+      const drawn = reducer({ ...initialState, current: house }, pointsAdded(added))
+      const s = reducer(drawn, fulfilled(fetchBlueprint, bp('jane', 'garden', 1)))
+      expect(s.dirty).toBe(false)
+    })
   })
 
   describe('actualizaciones optimistas', () => {

@@ -376,6 +376,35 @@ label,
   border-radius: 12px;
 }
 
+/* ---- Tiempo real ---- */
+.rt-selector {
+  min-width: 0;
+}
+.rt-status {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.rt-status::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--border-strong);
+}
+.rt-status.connected::before {
+  background: #16a34a;
+}
+.rt-status.connecting::before {
+  background: #d97706;
+}
+.rt-status.disconnected::before {
+  background: var(--danger);
+}
+
 /* ---- Feedback ---- */
 .banner {
   display: flex;

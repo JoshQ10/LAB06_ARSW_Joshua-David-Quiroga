@@ -8,6 +8,7 @@ pnpm-debug.log*
 # Build
 dist/
 build/
+target/
 
 # Local env files
 .env
